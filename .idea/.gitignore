@@ -1,0 +1,8 @@
+# Default ignored files
+/shelf/
+/workspace.xml
+# Datasource local storage ignored files
+/../../../../../../../../../:\chrom\download\DeepLearning\deep-learning-for-image-processing-master\deep-learning-for-image-processing-master\pytorch_segmentation\unet\.idea/dataSources/
+/dataSources.local.xml
+# Editor-based HTTP Client requests
+/httpRequests/
