@@ -60,14 +60,14 @@ def get_transform(train, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)):
 
 def create_model(num_classes):
     #model = AMSUnet(in_channels=3, num_classes=num_classes, base_c=32)
-    model = PDFUNet(in_channels=3, num_classes=num_classes)
+    #model = PDFUNet(in_channels=3, num_classes=num_classes)
     #model = ConvUNeXt(in_channels=3, num_classes=num_classes, base_c=32)
     #model = UNet(in_channels=3, num_classes=num_classes, base_c=32)
     #model = UNet_3Plus(in_channels=3, n_classes=num_classes)
     #model = ResUNetPlusPlus(in_channels=3, num_classes=num_classes)
     #model = DCSAUNet(img_channels=3, n_classes=2)
     #model = AttU_Net(in_channels=3, num_classes=2)
-    #model = MSDANet(in_channels=3, num_classes=num_classes, base_c=32)
+    model = MSDANet(in_channels=3, num_classes=num_classes, base_c=32)
     return model
 
 
@@ -172,7 +172,7 @@ def main(args):
             save_file["scaler"] = scaler.state_dict()
 
         if args.save_best is True:
-            torch.save(save_file, "save_weights/Best_model_CVC_PDFUNet.pth")
+            torch.save(save_file, "save_weights/Best_model_CVC_MSDANet.pth")
         else:
             torch.save(save_file, "save_weights/model_{}.pth".format(epoch))
 
