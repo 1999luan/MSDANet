@@ -30,7 +30,7 @@ class MLP(nn.Module):
         return x
 
 #定义PSP模块
-class PSPModule(nn.Module):
+class SFP(nn.Module):
     def __init__(self, features, mid_features=1024, out_features=32, sizes=(1, 2, 3, 6)):
         super().__init__()
         self.stages = []
@@ -54,7 +54,7 @@ class PSPModule(nn.Module):
         return self.relu(out)
 
 #定义改编SK
-class SKAttention(nn.Module):
+class MSK(nn.Module):
 
     def __init__(self, channel=32, kernels=[3, 5, 7], reduction=4, L=32, base_atrous_rate=[4, 6, 8]):
         super().__init__()
@@ -146,9 +146,9 @@ class SKAttention(nn.Module):
 
 
 #定义SE模块
-class SELayer(nn.Module):
+class MSE(nn.Module):
     def __init__(self, channel, reduction=16):
-        super(SELayer, self).__init__()
+        super(MSE, self).__init__()
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.fc = nn.Sequential(
             nn.Linear(channel, channel // reduction, bias=False),
@@ -192,11 +192,11 @@ class Conv(nn.Sequential):
             nn.ReLU(inplace=True),
         )
 
-class DoubleConv(nn.Module):
+class BC(nn.Module):
     def __init__(self, in_channels, out_channels, mid_channels=None):
         if mid_channels is None:
             mid_channels = out_channels
-        super(DoubleConv, self).__init__()
+        super(BC, self).__init__()
         self.Conv1 = nn.Sequential(
             nn.Conv2d(in_channels, in_channels, kernel_size=7, padding=3, bias=False),
             nn.BatchNorm2d(in_channels),
@@ -238,10 +238,10 @@ class Down(nn.Module):
             nn.ReLU())
         if flag:
             self.cat_convs = Cat_conv(2 * in_channels, in_channels)
-            self.sk = SKAttention(in_channels, base_atrous_rate=base_atrous_rate)
+            self.msk = MSK(in_channels, base_atrous_rate=base_atrous_rate)
         else:
             self.cat_convs = Cat_conv(2 * in_channels, 2 * in_channels)
-            self.sk = SKAttention(2 * in_channels, base_atrous_rate=base_atrous_rate)
+            self.msk = MSK(2 * in_channels, base_atrous_rate=base_atrous_rate)
 
     def forward(self, x):
         b, c, _, _ = x.size()
@@ -249,7 +249,7 @@ class Down(nn.Module):
         x_conv1 = self.convs1(x)
         x_conv2 = self.convs2(x_conv1)
         x = self.cat_convs(x_max, x_conv2)
-        x = self.sk(x)
+        x = self.msk(x)
         return x
 
 class Cat_conv(nn.Module):
@@ -267,11 +267,11 @@ class Up(nn.Module):
         super(Up, self).__init__()
         if bilinear:
             self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
-            self.conv = DoubleConv(in_channels, out_channels, in_channels // 2)
-            self.se = SELayer(out_channels)
+            self.conv = BC(in_channels, out_channels, in_channels // 2)
+            self.se = MSE(out_channels)
         else:
             self.up = nn.ConvTranspose2d(in_channels, in_channels // 2, kernel_size=2, stride=2)
-            self.conv = DoubleConv(in_channels, out_channels)
+            self.conv = BC(in_channels, out_channels)
 
     def forward(self, x1, x2):
         x1 = self.up(x1)
@@ -336,19 +336,19 @@ class MSDANet(nn.Module):
 
         self.in_conv = In_Conv(in_channels, base_c)
         self.cat_conv0 = Cat_conv(2*base_c, base_c)
-        self.psp0 = PSPModule(features=base_c, out_features=32)
+        self.sfp0 = SFP(features=base_c, out_features=32)
 
         self.down1 = Down(base_c, atrous_rate=6, base_atrous_rate=Calculate_atrous_rate(image_size//2, 2))
         self.cat_conv1 = Cat_conv(4 * base_c, 2 * base_c)
-        self.psp1 = PSPModule(features=64, out_features=64)
+        self.sfp1 = SFP(features=64, out_features=64)
 
         self.down2 = Down(base_c * 2, atrous_rate=5, base_atrous_rate=Calculate_atrous_rate(image_size//2, 3))
         self.cat_conv2 = Cat_conv(8 * base_c, 4 * base_c)
-        self.psp2 = PSPModule(features=128, out_features=128)
+        self.sfp2 = SFP(features=128, out_features=128)
 
         self.down3 = Down(base_c * 4, atrous_rate=4, base_atrous_rate=Calculate_atrous_rate(image_size//2, 4))
         self.cat_conv3 = Cat_conv(16 * base_c, 8 * base_c)
-        self.psp3 = PSPModule(features=256, out_features=256)
+        self.sfp3 = SFP(features=256, out_features=256)
 
         factor = 2 if bilinear else 1
 
@@ -369,16 +369,16 @@ class MSDANet(nn.Module):
     def forward(self, x):
         x1 = self.in_conv(x)
         #x1 = self.sk0(x1)
-        x1_1 = self.psp0(x1)
+        x1_1 = self.sfp0(x1)
         x1_1 = self.cat_conv0(x1, x1_1)
         x2 = self.down1(x1)
-        x2_1 = self.psp1(x2)
+        x2_1 = self.sfp1(x2)
         x2_1 = self.cat_conv1(x2, x2_1)
         x3 = self.down2(x2)
-        x3_1 = self.psp2(x3)
+        x3_1 = self.sfp2(x3)
         x3_1 = self.cat_conv2(x3, x3_1)
         x4 = self.down3(x3)
-        x4_1 = self.psp3(x4)
+        x4_1 = self.sfp3(x4)
         x4_1 = self.cat_conv3(x4, x4_1)
         x5 = self.down4(x4)
         x = self.up1(x5, x4_1)
@@ -390,29 +390,29 @@ class MSDANet(nn.Module):
         return {"out": logits}
 
 
-if __name__ == '__main__':
-    if __name__ == "__main__":
-        input = torch.randn(2, 3, 480, 480)
-        model = MSDANet(in_channels=3, num_classes=2, base_c=32)
-        print(input.shape)
-        output = model(input)
-        print(output['out'].shape)
 
-        from ptflops import get_model_complexity_info
+if __name__ == "__main__":
+    input = torch.randn(2, 3, 480, 480)
+    model = MSDANet(in_channels=3, num_classes=2, base_c=32)
+    print(input.shape)
+    output = model(input)
+    print(output['out'].shape)
 
-        flops, params = get_model_complexity_info(model, input_res=(3, 240, 240), as_strings=True,
-                                                  print_per_layer_stat=False)
-        print('      - Flops:  ' + flops)
-        print('      - Params: ' + params)
-    # input = torch.randn(2, 3, 240, 240)
-    # print(input.shape)
-    # model = MSDANet(in_channels=3, num_classes=2, base_c=32)
-    # output = model(input)
-    # #torch.sigmoid()
-    # #print(output.shape)
-    # print(output['out'].shape)
-    # # model = LZ_UNet(in_channels=3, num_classes=2, base_c=32)
-    # # if torch.cuda.is_available():
-    # #     model.cuda()
-    # # summary(model, input_size=(3, 480, 480), batch_size=1)
+    from ptflops import get_model_complexity_info
+
+    flops, params = get_model_complexity_info(model, input_res=(3, 240, 240), as_strings=True,
+                                              print_per_layer_stat=False)
+    print('      - Flops:  ' + flops)
+    print('      - Params: ' + params)
+# input = torch.randn(2, 3, 240, 240)
+# print(input.shape)
+# model = MSDANet(in_channels=3, num_classes=2, base_c=32)
+# output = model(input)
+# #torch.sigmoid()
+# #print(output.shape)
+# print(output['out'].shape)
+# # model = LZ_UNet(in_channels=3, num_classes=2, base_c=32)
+# # if torch.cuda.is_available():
+# #     model.cuda()
+# # summary(model, input_size=(3, 480, 480), batch_size=1)
 
